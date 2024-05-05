@@ -1,32 +1,9 @@
-from PyQt6.QtCore import Qt, QUrl, QSize
+from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout,
         QPushButton, QSlider, QStyle, QVBoxLayout, QWidget, QStatusBar)
 from moviepy.editor import VideoFileClip, concatenate_videoclips
-
-'''
-TODO    Предпросмотр обрезки
-        Маркеры вырезаемых видео
-        Клавиши для движения по кадрам
-'''
-
-def crop_and_concat_video(input_video, frame_ranges, output_path):
-    video_clip = VideoFileClip(input_video)
-    cropped_clips = []
-
-    for frame_range in frame_ranges:
-        start_frame, end_frame = [i/1000 for i in frame_range]
-        cropped_clip = video_clip.subclip(t_start=start_frame, t_end=end_frame)
-        cropped_clips.append(cropped_clip)
-    
-    final_clip = concatenate_videoclips(cropped_clips)
-    
-    final_clip.write_videofile(output_path, codec='libx264', fps=video_clip.fps)
-    
-    # Освобождение ресурсов
-    final_clip.close()
-    video_clip.close()
 
 class VideoPlayer(QWidget):
 
@@ -38,7 +15,6 @@ class VideoPlayer(QWidget):
 
         self.mediaPlayer = QMediaPlayer()
 
-        btnSize = QSize(16, 16)
         videoWidget = QVideoWidget()
         self._audio_output = QAudioOutput()
         self.mediaPlayer.setAudioOutput(self._audio_output)
@@ -48,18 +24,15 @@ class VideoPlayer(QWidget):
         openButton.clicked.connect(self.abrir)
 
         self.playButton = QPushButton()
-        self.playButton.setEnabled(False)
         self.playButton.clicked.connect(self.play)
         self.playButton.clicked.connect(self.getCurrentTime)
 
         exportButton = QPushButton("Export")
-        # exportButton.setEnabled(False)
         exportButton.clicked.connect(self.export)
 
         leftButton = QPushButton("<")
 
         markButton = QPushButton("∧")
-        # markButton.setEnabled(False)
         markButton.clicked.connect(self.markerSet)
 
         rightButton = QPushButton(">")
@@ -73,6 +46,7 @@ class VideoPlayer(QWidget):
         markLayout.addWidget(rightButton)
 
         self.positionSlider = QSlider(Qt.Orientation.Horizontal)
+        # Не работает на маке
         # self.positionSlider.setTickPosition(QSlider.TickPosition.TicksAbove)
         self.positionSlider.setRange(0, 0)
         self.positionSlider.setSingleStep(1)
@@ -97,7 +71,6 @@ class VideoPlayer(QWidget):
         
         self.setLayout(layout)
 
-        #help(self.mediaPlayer)
         self.mediaPlayer.setVideoOutput(videoWidget)
         
         self.mediaPlayer.playbackStateChanged.connect(self.mediaStateChanged)
@@ -162,6 +135,23 @@ class VideoPlayer(QWidget):
     def export(self):
         print(self.intervalArr)
         crop_and_concat_video(self.fileName, self.intervalArr, "outp.mp4")
+
+def crop_and_concat_video(input_video, frame_ranges, output_path):
+    video_clip = VideoFileClip(input_video)
+    cropped_clips = []
+
+    for frame_range in frame_ranges:
+        start_frame, end_frame = [i/1000 for i in frame_range]
+        cropped_clip = video_clip.subclip(t_start=start_frame, t_end=end_frame)
+        cropped_clips.append(cropped_clip)
+    
+    final_clip = concatenate_videoclips(cropped_clips)
+    
+    final_clip.write_videofile(output_path, codec='libx264', fps=video_clip.fps)
+    
+    # Освобождение ресурсов
+    final_clip.close()
+    video_clip.close()
 
 if __name__ == '__main__':
     import sys
