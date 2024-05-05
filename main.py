@@ -1,15 +1,32 @@
-from PyQt6.QtGui import QIcon, QFont
-from PyQt6.QtCore import QDir, Qt, QUrl, QSize
+from PyQt6.QtCore import Qt, QUrl, QSize
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, QStyleFactory,
-        QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QStatusBar)
-import ffmpeg
-from functools import reduce
+from PyQt6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout,
+        QPushButton, QSlider, QStyle, QVBoxLayout, QWidget, QStatusBar)
+from moviepy.editor import VideoFileClip, concatenate_videoclips
 
 '''
-TODO: предпросмотр обрезки
+TODO    Предпросмотр обрезки
+        Маркеры вырезаемых видео
+        Клавиши для движения по кадрам
 '''
+
+def crop_and_concat_video(input_video, frame_ranges, output_path):
+    video_clip = VideoFileClip(input_video)
+    cropped_clips = []
+
+    for frame_range in frame_ranges:
+        start_frame, end_frame = [i/1000 for i in frame_range]
+        cropped_clip = video_clip.subclip(t_start=start_frame, t_end=end_frame)
+        cropped_clips.append(cropped_clip)
+    
+    final_clip = concatenate_videoclips(cropped_clips)
+    
+    final_clip.write_videofile(output_path, codec='libx264', fps=video_clip.fps)
+    
+    # Освобождение ресурсов
+    final_clip.close()
+    video_clip.close()
 
 class VideoPlayer(QWidget):
 
@@ -39,31 +56,45 @@ class VideoPlayer(QWidget):
         # exportButton.setEnabled(False)
         exportButton.clicked.connect(self.export)
 
-        markButton = QPushButton("mark")
+        leftButton = QPushButton("<")
+
+        markButton = QPushButton("∧")
         # markButton.setEnabled(False)
         markButton.clicked.connect(self.markerSet)
 
+        rightButton = QPushButton(">")
+
+        markLayout = QHBoxLayout()
+        markLayout.setContentsMargins(0, 0, 0, 0)
+        markLayout.setSpacing(0)
+        markLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        markLayout.addWidget(leftButton)
+        markLayout.addWidget(markButton)
+        markLayout.addWidget(rightButton)
+
         self.positionSlider = QSlider(Qt.Orientation.Horizontal)
+        # self.positionSlider.setTickPosition(QSlider.TickPosition.TicksAbove)
         self.positionSlider.setRange(0, 0)
+        self.positionSlider.setSingleStep(1)
         self.positionSlider.sliderMoved.connect(self.setPosition)
 
         self.statusBar = QStatusBar()
-        self.statusBar.setFont(QFont("Noto Sans", 7))
         self.statusBar.setFixedHeight(14)
 
         controlLayout = QHBoxLayout()
+        controlLayout.setSpacing(1)
         controlLayout.setContentsMargins(0, 0, 0, 0)
         controlLayout.addWidget(openButton)
-        controlLayout.addWidget(self.playButton)
-        controlLayout.addWidget(markButton)
         controlLayout.addWidget(exportButton)
+        controlLayout.addWidget(self.playButton)
         controlLayout.addWidget(self.positionSlider)
 
         layout = QVBoxLayout()
         layout.addWidget(videoWidget)
         layout.addLayout(controlLayout)
+        layout.addLayout(markLayout)
         layout.addWidget(self.statusBar)
-
+        
         self.setLayout(layout)
 
         #help(self.mediaPlayer)
@@ -112,7 +143,8 @@ class VideoPlayer(QWidget):
         self.mediaPlayer.setPosition(position)
 
     def markerSet(self, position):
-        v = self.positionSlider.value()
+        v = self.mediaPlayer.position()
+        
         print(self.marker, v)
         if self.marker == None:
             self.marker = v
@@ -128,33 +160,8 @@ class VideoPlayer(QWidget):
         self.statusBar.showMessage("Error: " + self.mediaPlayer.errorString())
 
     def export(self):
-        #!!!
         print(self.intervalArr)
-        in_file = ffmpeg.input(self.fileName)
-        def combine_intervals(a, b):
-            return in_file.trim(start_frame=a, end_frame=b)
-        a = reduce(combine_intervals, self.intervalArr)
-        print(a)
-        (
-            ffmpeg
-            .concat(a)
-            .output('output.mp4')
-            .run()
-        )
-
-        # (
-        # ffmpeg
-        # .concat(
-        #     [in_file.trim(
-        #         start_frame=self.intervalArr[i][0],
-        #         end_frame=self.intervalArr[i][1]
-        #     )
-        #     for i in range(len(self.intervalArr))]
-        # )
-        # .output('output.mp4')
-        # .run()
-        # )
-        
+        crop_and_concat_video(self.fileName, self.intervalArr, "outp.mp4")
 
 if __name__ == '__main__':
     import sys
