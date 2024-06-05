@@ -1,17 +1,100 @@
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtCore import Qt, QUrl, QPoint
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout,
-        QPushButton, QSlider, QStyle, QVBoxLayout, QWidget, QStatusBar)
+from PyQt6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, QGridLayout,
+        QPushButton, QSlider, QStyle, QVBoxLayout, QWidget, QStatusBar, QStyleOptionSlider)
+from PyQt6.QtGui import QColor, QPixmap, QPen, QPainter, QBrush, QPolygon
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 
+from entities import MarkDeq
+
+class Marker(QLabel):
+    def __init__(self, parent=None):
+        super(Marker, self).__init__(parent)
+        self._slider = None
+        # self.setAcceptDrops(True) 
+        pix = QPixmap(30, 30)
+        pix.fill(QColor("transparent"))
+        paint = QPainter(pix)
+        slider_color = QColor(255, 255, 255)
+        handle_pen = QPen(QColor(slider_color.darker(200)))
+        handle_pen.setWidth(3)
+        paint.setPen(handle_pen)
+        paint.setBrush(QBrush(slider_color, Qt.BrushStyle.SolidPattern))
+        points = QPolygon([
+            QPoint(5, 5),
+            QPoint(5, 19),
+            QPoint(13, 27),
+        
+            QPoint(21, 19),
+            QPoint(21, 5),
+
+        ])
+        paint.drawPolygon(points)
+        del paint
+        self.setPixmap(pix)
+
+class myTimeline(QWidget):
+    def __init__(self, parent=None):
+        super(myTimeline, self).__init__(parent)
+        layout = QGridLayout(self)
+        self.intervalValues = []
+        layout.setSpacing(0)
+        self.slider = QSlider(Qt.Orientation.Horizontal)
+        # self.slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+        # self.slider.setTickInterval(1)
+        self.slider.setSingleStep(1)
+        self.slider.setRange(0, 0)
+        # self.slider.setAcceptDrops(True)
+        self.resize(self.width(), 50)
+        layout.addWidget(self.slider)
+
+    def create_marker(self):
+        bookmark = Marker(self)
+        opt = QStyleOptionSlider()
+        self.slider.initStyleOption(opt)
+        rect = self.slider.style().subControlRect(
+            QStyle.ComplexControl.CC_Slider,
+            opt,
+            QStyle.SubControl.SC_SliderHandle,
+            self.slider
+        )
+        bookmark.move(rect.center().x(), 0)
+        bookmark.show()
+
+    def mouseDoubleClickEvent(self, event):
+        self.create_marker()
+
+    def paintEvents(self):
+        # super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor('green'))
+
+
+        # handle_rect = self.handleRect()
+        # for range in self.intervalValues:
+        #     start = self.__value
+
+    # def paintEvent(self, event):
+    #     super().paintEvent(event)
+    #     painter = QPainter(self)
+    #     painter.setPen(Qt.PenStyle.NoPen)
+    #     painter.setBrush(QColor('green'))
+
+    #     for range in self.green_ranges:
+    #         start = self.__value_to_pos(range[0])
+    #         end = self.__value_to_pos(range[1])
+    #         rect = QRect(start, 0, end - start, self.height())
+    #         painter.drawRect(rect)
+
+    # def mous
 class VideoPlayer(QWidget):
 
     def __init__(self, parent=None):
         super(VideoPlayer, self).__init__(parent)
 
         self.marker = None
-        self.intervalArr = []
 
         self.mediaPlayer = QMediaPlayer()
 
@@ -37,6 +120,16 @@ class VideoPlayer(QWidget):
 
         rightButton = QPushButton(">")
 
+        self.positionSlider = QSlider(Qt.Orientation.Horizontal)
+        # Не работает на маке
+        # self.positionSlider.setTickPosition(QSlider.TickPosition.TicksAbove)
+        self.positionSlider.setRange(0, 0)
+        self.positionSlider.setSingleStep(1)
+        self.positionSlider.sliderMoved.connect(self.setPosition)
+
+        self.timeline = myTimeline()
+        self.timeline.slider.sliderMoved.connect(self.setPosition)
+
         markLayout = QHBoxLayout()
         markLayout.setContentsMargins(0, 0, 0, 0)
         markLayout.setSpacing(0)
@@ -44,13 +137,8 @@ class VideoPlayer(QWidget):
         markLayout.addWidget(leftButton)
         markLayout.addWidget(markButton)
         markLayout.addWidget(rightButton)
-
-        self.positionSlider = QSlider(Qt.Orientation.Horizontal)
-        # Не работает на маке
-        # self.positionSlider.setTickPosition(QSlider.TickPosition.TicksAbove)
-        self.positionSlider.setRange(0, 0)
-        self.positionSlider.setSingleStep(1)
-        self.positionSlider.sliderMoved.connect(self.setPosition)
+        markLayout.addWidget(self.playButton)
+        markLayout.addWidget(self.timeline)
 
         self.statusBar = QStatusBar()
         self.statusBar.setFixedHeight(14)
@@ -60,13 +148,11 @@ class VideoPlayer(QWidget):
         controlLayout.setContentsMargins(0, 0, 0, 0)
         controlLayout.addWidget(openButton)
         controlLayout.addWidget(exportButton)
-        controlLayout.addWidget(self.playButton)
-        controlLayout.addWidget(self.positionSlider)
 
         layout = QVBoxLayout()
         layout.addWidget(videoWidget)
-        layout.addLayout(controlLayout)
         layout.addLayout(markLayout)
+        layout.addLayout(controlLayout)
         layout.addWidget(self.statusBar)
         
         self.setLayout(layout)
@@ -104,13 +190,16 @@ class VideoPlayer(QWidget):
                     self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
 
     def getCurrentTime(self, position):
-        print(self.positionSlider.value())
+        # handle_rect = self.timeline.slider.handleRect()
+        # x = handle_rect.x()
+        # y = handle_rect.y()
+        print(self.timeline.slider.value())
 
     def positionChanged(self, position):
-        self.positionSlider.setValue(position)
+        self.timeline.slider.setValue(position)
 
     def durationChanged(self, duration):
-        self.positionSlider.setRange(0, duration)
+        self.timeline.slider.setRange(0, duration)
 
     def setPosition(self, position):
         self.mediaPlayer.setPosition(position)
@@ -124,17 +213,20 @@ class VideoPlayer(QWidget):
         elif self.marker == v:
             self.marker = None
         else:
-            self.intervalArr.append([self.marker, v])
+            #draw rectangle 
+            self.timeline.paintEvents()
+            self.timeline.intervalValues.append([self.marker, v])
             self.marker = None
-        print(self.intervalArr)
+        print(self.timeline.intervalValues)
+        self.timeline.create_marker()
 
     def handleError(self):
         self.playButton.setEnabled(False)
         self.statusBar.showMessage("Error: " + self.mediaPlayer.errorString())
 
     def export(self):
-        print(self.intervalArr)
-        crop_and_concat_video(self.fileName, self.intervalArr, "outp.mp4")
+        print(self.timeline.intervalValues)
+        crop_and_concat_video(self.fileName, self.timeline.intervalValues, "outp.mp4")
 
 def crop_and_concat_video(input_video, frame_ranges, output_path):
     video_clip = VideoFileClip(input_video)
