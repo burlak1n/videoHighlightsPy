@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, QGr
 from PyQt6.QtGui import QColor, QPixmap, QPen, QPainter, QBrush, QPolygon
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 
-from entities import MarkDeq
+from entities import MarkDeq, arrSide, bookmarkM
 
 class Marker(QLabel):
     def __init__(self, parent=None):
@@ -38,7 +38,7 @@ class myTimeline(QWidget):
     def __init__(self, parent=None):
         super(myTimeline, self).__init__(parent)
         layout = QGridLayout(self)
-        self.intervalValues = []
+        self.intervalValues = MarkDeq()
         layout.setSpacing(0)
         self.slider = QSlider(Qt.Orientation.Horizontal)
         # self.slider.setTickPosition(QSlider.TickPosition.TicksAbove)
@@ -61,15 +61,23 @@ class myTimeline(QWidget):
         )
         bookmark.move(rect.center().x(), 0)
         bookmark.show()
+        self.slider.style()
+        bookmarkM[rect.center().x()] = bookmark
+
+    def delete_marker(self, x):
+        # print("del", bookmarkM, x)
+        bookmarkM[x].clear()
+        del bookmarkM[x]
 
     def mouseDoubleClickEvent(self, event):
         self.create_marker()
 
-    def paintEvents(self):
-        # super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor('green'))
+        # [i/1000 for i in frame_range] ------_!
+    # def paintEvents(self):
+    #     # super().paintEvent(event)
+    #     painter = QPainter(self)
+    #     painter.setPen(Qt.PenStyle.NoPen)
+    #     painter.setBrush(QColor('green'))
 
 
         # handle_rect = self.handleRect()
@@ -114,11 +122,13 @@ class VideoPlayer(QWidget):
         exportButton.clicked.connect(self.export)
 
         leftButton = QPushButton("<")
+        leftButton.clicked.connect(self.changePosition)
 
         markButton = QPushButton("∧")
         markButton.clicked.connect(self.markerSet)
 
         rightButton = QPushButton(">")
+        rightButton.clicked.connect(self.changePosition)
 
         self.positionSlider = QSlider(Qt.Orientation.Horizontal)
         # Не работает на маке
@@ -164,7 +174,6 @@ class VideoPlayer(QWidget):
         self.mediaPlayer.durationChanged.connect(self.durationChanged)
         self.mediaPlayer.errorChanged.connect(self.handleError)
         self.statusBar.showMessage("Ready")
-
     def abrir(self):
         self.fileName, _ = QFileDialog.getOpenFileName(self, "Select Media",
                 ".", "Video Files (*.mp4 *.flv *.ts *.mts *.avi)")
@@ -193,7 +202,8 @@ class VideoPlayer(QWidget):
         # handle_rect = self.timeline.slider.handleRect()
         # x = handle_rect.x()
         # y = handle_rect.y()
-        print(self.timeline.slider.value())
+        # print(self.timeline.slider.value())
+        pass
 
     def positionChanged(self, position):
         self.timeline.slider.setValue(position)
@@ -206,34 +216,62 @@ class VideoPlayer(QWidget):
 
     def markerSet(self, position):
         v = self.mediaPlayer.position()
-        
-        print(self.marker, v)
-        if self.marker == None:
-            self.marker = v
-        elif self.marker == v:
-            self.marker = None
+        # print(v)
+        if self.timeline.intervalValues.insertV(v):
+            # self.timeline.paintEvent()
+            self.timeline.create_marker()
         else:
-            #draw rectangle 
-            self.timeline.paintEvents()
-            self.timeline.intervalValues.append([self.marker, v])
-            self.marker = None
-        print(self.timeline.intervalValues)
-        self.timeline.create_marker()
+            opt = QStyleOptionSlider()
+            self.timeline.slider.initStyleOption(opt)
+            self.timeline.delete_marker(self.timeline.slider.style().subControlRect(
+                QStyle.ComplexControl.CC_Slider,
+                opt,
+                QStyle.SubControl.SC_SliderHandle,
+                self.timeline.slider
+            ).center().x())
+            self.screenError("Маркер удалён")
+            # print(bookmarkM, len(bookmarkM))
+
+        
+        # print(self.marker, v)
+        # if self.marker == None:
+        #     self.marker = v
+        # elif self.marker == v:
+        #     self.marker = None
+        # else:
+        #     #draw rectangle 
+        #     self.marker = None
+    def screenError(self, s):
+        self.statusBar.showMessage(s)
+    def changePosition(self):
+
+        v = self.timeline.intervalValues.pos(
+            self.mediaPlayer.position(), 
+            arrSide[self.sender().text()]
+        )
+        if v:
+            self.setPosition(v)
+            # self.positionChanged(v)
+            return
+        self.screenError("Добавьте маркер")
 
     def handleError(self):
         self.playButton.setEnabled(False)
         self.statusBar.showMessage("Error: " + self.mediaPlayer.errorString())
 
     def export(self):
-        print(self.timeline.intervalValues)
-        crop_and_concat_video(self.fileName, self.timeline.intervalValues, "outp.mp4")
+        a = self.timeline.intervalValues.pairs()
+        # print(self.timeline.intervalValues, a)
+        if a:
+            crop_and_concat_video(self.fileName, a, "outp.mp4")
+        else:
+            self.screenError("Нечётное количество маркеров, добавьте или удалите один")
 
 def crop_and_concat_video(input_video, frame_ranges, output_path):
     video_clip = VideoFileClip(input_video)
     cropped_clips = []
-
-    for frame_range in frame_ranges:
-        start_frame, end_frame = [i/1000 for i in frame_range]
+    print(frame_ranges)
+    for start_frame, end_frame in frame_ranges:
         cropped_clip = video_clip.subclip(t_start=start_frame, t_end=end_frame)
         cropped_clips.append(cropped_clip)
     
