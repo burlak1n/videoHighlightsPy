@@ -264,6 +264,7 @@ class VideoPlayer(QWidget):
         # print(self.timeline.intervalValues, a)
         if a:
             crop_and_concat_video(self.fileName, a, "outp.mp4")
+            self.screenError("Файл сохранён в папке app, из которой производился запуск")
         else:
             self.screenError("Нечётное количество маркеров, добавьте или удалите один")
 
